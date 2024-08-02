@@ -30,9 +30,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static final String TAG = "MainActivity";
-    public static int REQUEST_CODE = 1;
+    public static final int REQUEST_CODE = 1;
     public TextView cam0_info;
-    public String[] cameraIds = {"0", "1", "2", "3"};
+    public String[] cameraIds = {"0", "1", "2", "3", "4"};
+    private static final String DEFAULT_CAMERA_ID = "0";
     public String all_cam_info;
 
     @Override
@@ -46,16 +47,27 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkPermission(this);
+        GetCameraInfo();
+
+    }
+
+    private void GetCameraInfo() {
+        Log.d(TAG, "GetCameraInfo: ");
+        if (cameraIds == null || cameraIds.length == 0) {
+            Log.e(TAG, "cameraIds is empty");
+            return;
+        }
+
         all_cam_info = "";
         int cameraCount = cameraIds.length;
         CamInfo[] camInfo = new CamInfo[cameraCount];
         CameraManager manager = (CameraManager) this.getSystemService(Context.CAMERA_SERVICE);
-        int i = 0;
+
         try {
             Log.d(TAG, "setUpCameraOutputs: manager.getCameraIdList() size: "
                     + manager.getCameraIdList().length);
-            for (String cameraId : cameraIds) {
-                // override camera id for debug
+            for (int i = 0; i < cameraCount; i++) {
+                String cameraId = cameraIds[i];
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
                 Size pixelArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
                 float[] focalLength = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
@@ -76,8 +88,11 @@ public class MainActivity extends AppCompatActivity {
                         + "\nfocal length: " + focalLength[0]
                         + "\npixel array size: " + pixelArraySize
                         + "\npixel size: " + pixelSize + "\n\n";
-                float fov_ratio = activeArraySize.width() * pixelSize / focalLength[0];
-                camInfo[i++] = new CamInfo(cameraId, fov_ratio);
+                float fov_ratio = calculateFOVratio(activeArraySize, pixelSize, focalLength);
+                camInfo[i] = new CamInfo(cameraId, fov_ratio);
+                if (!cameraId.equals(DEFAULT_CAMERA_ID)) {
+                    Log.d(TAG, "camera id " + camInfo[0].id + " and " + camInfo[i].id + " ratio:" + (camInfo[0].fovRatio / camInfo[i].fovRatio));
+                }
             }
         } catch (CameraAccessException e) {
             Log.e(TAG, "CameraAccessException");
@@ -86,17 +101,20 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "NullPointerException");
             e.printStackTrace();
         }
-        Log.d(TAG, "camera id " + camInfo[0].id + " and " + camInfo[2].id + " ratio:" + camInfo[0].fovRatio / camInfo[2].fovRatio);
-        Log.d(TAG, "camera id " + camInfo[0].id + " and " + camInfo[3].id + " ratio:" + camInfo[0].fovRatio / camInfo[3].fovRatio);
-
-        all_cam_info = all_cam_info + "camera id " + camInfo[0].id + " and " + camInfo[2].id + " ratio:" + (camInfo[0].fovRatio / camInfo[2].fovRatio)
-                + "\ncamera id " + camInfo[0].id + " and " + camInfo[3].id + " ratio:" + (camInfo[0].fovRatio / camInfo[3].fovRatio);
+        for (CamInfo info : camInfo) {
+            if (!info.id.equals(DEFAULT_CAMERA_ID)) {
+                all_cam_info = all_cam_info + "\ncamera id " + camInfo[0].id + " and " + info.id + " ratio:" + (camInfo[0].fovRatio / info.fovRatio);
+            }
+        }
         cam0_info.setText(all_cam_info);
+    }
 
+    private float calculateFOVratio(Rect activeArraySize, float pixelSize, float[] focalLength) {
+        return activeArraySize.width() * pixelSize / focalLength[0];
     }
 
 
-    public static void checkPermission(Activity activity) {
+    public void checkPermission(Activity activity) {
 
         Log.d(TAG, "checkPermission: ");
         if (ContextCompat.checkSelfPermission(
@@ -118,7 +136,32 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private static boolean shouldShowRequestPermissionRationale() {
+    private boolean shouldShowRequestPermissionRationale() {
         return false;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case REQUEST_CODE:
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 &&
+                        grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // Permission is granted. Continue the action or workflow
+                    // in your app.
+                    Log.d(TAG, "onRequestPermissionsResult: permission granted");
+                } else {
+                    // Explain to the user that the feature is unavailable because
+                    // the feature requires a permission that the user has denied.
+                    // At the same time, respect the user's decision. Don't link to
+                    // system settings in an effort to convince the user to change
+                    // their decision.
+                }
+                return;
+        }
+        // Other 'case' lines to check for other
+        // permissions this app might request.
     }
 }
