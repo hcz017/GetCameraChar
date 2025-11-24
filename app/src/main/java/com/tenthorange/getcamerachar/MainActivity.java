@@ -46,7 +46,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        checkPermission(this);
+//        camera permission seems not need
+//        checkPermission(this);
         GetCameraInfo();
 
     }
