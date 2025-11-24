@@ -18,6 +18,8 @@ import android.util.Size;
 import android.util.SizeF;
 import android.widget.TextView;
 
+import java.lang.Math;
+
 public class MainActivity extends AppCompatActivity {
     static class CamInfo {
         public String id;
@@ -90,13 +92,17 @@ public class MainActivity extends AppCompatActivity {
                             activeArraySize.left + " " + activeArraySize.top + " " +
                             activeArraySize.width() + " " + activeArraySize.height());
 
-                    all_cam_info = all_cam_info + "cameraId:" + cameraId
-                            + "\nfocal length: " + focalLength[0]
-                            + "\npixel array size: " + pixelArraySize
-                            + "\npixel size: " + pixelSize + "\n\n";
-
                     float fov_ratio = calculateFOVratio(activeArraySize, pixelSize, focalLength);
                     camInfo[i] = new CamInfo(cameraId, fov_ratio);
+                    float fov_degree = calculateFOVdegree(activeArraySize, pixelSize, focalLength[0]);
+
+                    all_cam_info = all_cam_info + "📷 Camera " + cameraId + ":"
+                            + "\nfocal length: " + focalLength[0]
+                            + "\npixel size: " + pixelSize
+                            + "\npixel array size: " + pixelArraySize
+                            + "\nactive array size:" + activeArraySize.width() + "×" + activeArraySize.height()
+                            + "\nFOV degree: " + fov_degree
+                            + "\n\n";
 
                     // 安全地访问camInfo[0]
                     if (!cameraId.equals(DEFAULT_CAMERA_ID) && camInfo[0] != null && camInfo[i] != null) {
@@ -109,13 +115,13 @@ public class MainActivity extends AppCompatActivity {
 
                 } catch (IllegalArgumentException e) {
                     Log.e(TAG, "IllegalArgumentException for cameraId: " + cameraId, e);
-                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (can not get camera info)\n\n";
+                    all_cam_info = all_cam_info + "❌ Camera " + cameraId + ": Not available\n";
                 } catch (CameraAccessException e) {
                     Log.e(TAG, "CameraAccessException for cameraId: " + cameraId, e);
-                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (access denied)\n\n";
+                    all_cam_info = all_cam_info + "⚠️ Camera " + cameraId + ": Access denied\n";
                 } catch (Exception e) {
                     Log.e(TAG, "Unexpected exception for cameraId: " + cameraId, e);
-                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (error: " + e.getMessage() + ")\n\n";
+                    all_cam_info = all_cam_info + "⚠️ Camera " + cameraId + ": Error - " + e.getMessage() + "\n";
                 }
             }
         } catch (CameraAccessException e) {
@@ -126,15 +132,21 @@ public class MainActivity extends AppCompatActivity {
             all_cam_info = "Error: " + e.getMessage();
         }
 
-        // 安全地处理camInfo数组
+        // 安全地处理camInfo数组，显示FOV比率对比
         if (camInfo[0] != null) {
+            all_cam_info = all_cam_info + "\n📊 FOV Ratio: \n";
+            boolean first = true;
             for (CamInfo info : camInfo) {
                 if (info != null && !info.id.equals(DEFAULT_CAMERA_ID) && camInfo[0] != null) {
                     if (info.fovRatio != 0) {
-                        all_cam_info = all_cam_info + "\ncamera id " + camInfo[0].id + " and " + info.id + " ratio:" + (camInfo[0].fovRatio / info.fovRatio);
+                        float ratio = camInfo[0].fovRatio / info.fovRatio;
+                        if (!first) all_cam_info = all_cam_info + "\n";
+                        all_cam_info = all_cam_info + "CameraId" + camInfo[0].id + " vs CameraId" + info.id + " = " + String.format("%.3f", ratio);
+                        first = false;
                     }
                 }
             }
+            all_cam_info = all_cam_info + "\n";
         }
 
         if (cam0_info != null) {
@@ -146,6 +158,13 @@ public class MainActivity extends AppCompatActivity {
         return activeArraySize.width() * pixelSize / focalLength[0];
     }
 
+    private float calculateFOVdegree(Rect activeArraySize, float pixelSize, float focalLength) {
+        float sensor_diagonal = (float) (Math.sqrt(
+                activeArraySize.width() * activeArraySize.width() +
+                        activeArraySize.height() * activeArraySize.height()) * pixelSize / 1000);
+        float fov_radians = (float) (2 * Math.atan((sensor_diagonal / 2) / focalLength));
+        return (float) Math.toDegrees(fov_radians);
+    }
 
     public void checkPermission(Activity activity) {
 
