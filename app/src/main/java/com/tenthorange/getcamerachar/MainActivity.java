@@ -69,45 +69,77 @@ public class MainActivity extends AppCompatActivity {
                     + manager.getCameraIdList().length);
             for (int i = 0; i < cameraCount; i++) {
                 String cameraId = cameraIds[i];
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-                Size pixelArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
-                float[] focalLength = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                SizeF physicalSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-                float pixelSize = physicalSize.getWidth() / pixelArraySize.getWidth() * 1000;
-                Log.d(TAG, "cameraId:" + cameraId + ", SENSOR_INFO_PIXEL_ARRAY_SIZE: " + pixelArraySize);
-                Log.d(TAG, "cameraId:" + cameraId + ", LENS_INFO_AVAILABLE_FOCAL_LENGTHS: " + focalLength[0]);
-                Log.d(TAG, "cameraId:" + cameraId + ", pixel size: " + pixelSize);
-                Log.d(TAG, "cameraId:" + cameraId + ", pixel array size: " +
-                        pixelArraySize.getWidth() + " " + pixelArraySize.getHeight());
 
-                Rect activeArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-                Log.d(TAG, "cameraId:" + cameraId + ", active_array_size l t w h: " +
-                        activeArraySize.left + " " + activeArraySize.top + " " +
-                        activeArraySize.width() + " " + activeArraySize.height());
+                // 为每个camera单独处理，避免一个失败影响其他
+                // 直接调用getCameraCharacteristics，如果cameraId不存在会抛出IllegalArgumentException
+                try {
+                    CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
 
-                all_cam_info = all_cam_info + "cameraId:" + cameraId
-                        + "\nfocal length: " + focalLength[0]
-                        + "\npixel array size: " + pixelArraySize
-                        + "\npixel size: " + pixelSize + "\n\n";
-                float fov_ratio = calculateFOVratio(activeArraySize, pixelSize, focalLength);
-                camInfo[i] = new CamInfo(cameraId, fov_ratio);
-                if (!cameraId.equals(DEFAULT_CAMERA_ID)) {
-                    Log.d(TAG, "camera id " + camInfo[0].id + " and " + camInfo[i].id + " ratio:" + (camInfo[0].fovRatio / camInfo[i].fovRatio));
+                    Size pixelArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+                    float[] focalLength = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                    SizeF physicalSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                    float pixelSize = physicalSize.getWidth() / pixelArraySize.getWidth() * 1000;
+                    Log.d(TAG, "cameraId:" + cameraId + ", SENSOR_INFO_PIXEL_ARRAY_SIZE: " + pixelArraySize);
+                    Log.d(TAG, "cameraId:" + cameraId + ", LENS_INFO_AVAILABLE_FOCAL_LENGTHS: " + focalLength[0]);
+                    Log.d(TAG, "cameraId:" + cameraId + ", pixel size: " + pixelSize);
+                    Log.d(TAG, "cameraId:" + cameraId + ", pixel array size: " +
+                            pixelArraySize.getWidth() + " " + pixelArraySize.getHeight());
+
+                    Rect activeArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+                    Log.d(TAG, "cameraId:" + cameraId + ", active_array_size l t w h: " +
+                            activeArraySize.left + " " + activeArraySize.top + " " +
+                            activeArraySize.width() + " " + activeArraySize.height());
+
+                    all_cam_info = all_cam_info + "cameraId:" + cameraId
+                            + "\nfocal length: " + focalLength[0]
+                            + "\npixel array size: " + pixelArraySize
+                            + "\npixel size: " + pixelSize + "\n\n";
+
+                    float fov_ratio = calculateFOVratio(activeArraySize, pixelSize, focalLength);
+                    camInfo[i] = new CamInfo(cameraId, fov_ratio);
+
+                    // 安全地访问camInfo[0]
+                    if (!cameraId.equals(DEFAULT_CAMERA_ID) && camInfo[0] != null && camInfo[i] != null) {
+                        if (camInfo[i].fovRatio != 0) {
+                            Log.d(TAG, "camera id " + camInfo[0].id + " and " + camInfo[i].id + " ratio:" + (camInfo[0].fovRatio / camInfo[i].fovRatio));
+                        } else {
+                            Log.w(TAG, "fovRatio is 0 for cameraId: " + cameraId);
+                        }
+                    }
+
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "IllegalArgumentException for cameraId: " + cameraId, e);
+                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (can not get camera info)\n\n";
+                } catch (CameraAccessException e) {
+                    Log.e(TAG, "CameraAccessException for cameraId: " + cameraId, e);
+                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (access denied)\n\n";
+                } catch (Exception e) {
+                    Log.e(TAG, "Unexpected exception for cameraId: " + cameraId, e);
+                    all_cam_info = all_cam_info + "cameraId:" + cameraId + " (error: " + e.getMessage() + ")\n\n";
                 }
             }
         } catch (CameraAccessException e) {
-            Log.e(TAG, "CameraAccessException");
-            e.printStackTrace();
-        } catch (NullPointerException e) {
-            Log.e(TAG, "NullPointerException");
-            e.printStackTrace();
+            Log.e(TAG, "CameraAccessException when getting camera list", e);
+            all_cam_info = "Error: Cannot access camera service";
+        } catch (Exception e) {
+            Log.e(TAG, "Unexpected exception in GetCameraInfo", e);
+            all_cam_info = "Error: " + e.getMessage();
         }
-        for (CamInfo info : camInfo) {
-            if (!info.id.equals(DEFAULT_CAMERA_ID)) {
-                all_cam_info = all_cam_info + "\ncamera id " + camInfo[0].id + " and " + info.id + " ratio:" + (camInfo[0].fovRatio / info.fovRatio);
+
+        // 安全地处理camInfo数组
+        if (camInfo[0] != null) {
+            for (CamInfo info : camInfo) {
+                if (info != null && !info.id.equals(DEFAULT_CAMERA_ID) && camInfo[0] != null) {
+                    if (info.fovRatio != 0) {
+                        all_cam_info = all_cam_info + "\ncamera id " + camInfo[0].id + " and " + info.id + " ratio:" + (camInfo[0].fovRatio / info.fovRatio);
+                    }
+                }
             }
         }
-        cam0_info.setText(all_cam_info);
+
+        if (cam0_info != null) {
+            cam0_info.setText(all_cam_info.isEmpty() ? "No camera information available" : all_cam_info);
+        }
     }
 
     private float calculateFOVratio(Rect activeArraySize, float pixelSize, float[] focalLength) {
